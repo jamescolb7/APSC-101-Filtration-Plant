@@ -5,28 +5,29 @@ const int turbiditySensor1Pin = A0;  // Dirty water tank
 const int turbiditySensor2Pin = A1;  // Clean water tank
 const int startButtonPin = 20;         // Digital pin for start
 const int emergencyStopPin = 21;       // Must be pin 2 or 3 for interrupt
-const int pump1Pin = 1;              // Dirty water pump relay
+//const int dirtyPump = 1;              // Dirty water pump relay
 const int pump2Pin = 5;              // Alum slurry pump relay
-const int pump3Pin = 6;              // Clean water pump relay
+//const int cleanPump = 6;              // Clean water pump relay
 const int greenLED = 49;
 const int yellowLED = 48;
 const int redLED = 47;
 
 // Timing Parameters (in milliseconds - adjust based on testing)
-const unsigned long turbidityReadTime = 60000;    // 1 minute initial reading
-const unsigned long pump1RunTime = 30000;       // 30 seconds dirty water
-const unsigned long pump2RunTime = 5000;        // 5 seconds alum
-const unsigned long pump3RunTime = 40000;       // 40 seconds clean transfer
+const unsigned long turbidityReadTime = 30000;    // 1 minute initial reading
+const unsigned long dirtyPumpRunTime = 17000;       // 30 seconds dirty water
+const unsigned long pump2RunTime = 7000;        // 5 seconds alum
+const unsigned long cleanPumpRunTime = 10000;       // 40 seconds clean transfer
 const unsigned long fastMixTime = 15000;         // 15 seconds fast mixing
 const unsigned long slowMixTime = 15000;         // 15 seconds slow mixing
-const unsigned long settleTime = 45000;           // 45 seconds settlement
-const unsigned long pressLowerTime = 30000;      // 30 seconds press operation
-const unsigned long pressRaiseTime = 15000;      // 15 seconds to raise
+const unsigned long settleTime = 10000;           // 45 seconds settlement
+const unsigned long pressLowerTime = 6000;      // 30 seconds press operation
+const unsigned long pressRaiseTime = 6300;      // 15 seconds to raise
 
 // adjust values fro our motors (in between 0 and 255)
+const int pumpSpeed = 50;
 const int fastMixSpeed = 200;   
 const int slowMixSpeed = 100;    
-const int pressSpeed = 200;       // for press motor
+const int pressSpeed = 120;       // for press motor
 
 // Turbidity Thresholds
 const float minTurbidityToTreat = 100.0;   // NTU to start treatment
@@ -36,8 +37,10 @@ const bool DEBUG = true;
 
 // Motor Shield Setup (adjust motor numbers based on our connections)
 // i went off guessing the structure of the motor controller, might need change
-AF_DCMotor mixingMotor(2);   // Motor 1 on shield for mixing
-AF_DCMotor pressMotor(4);    // Motor 2 on shield for press
+AF_DCMotor cleanPump(3);
+AF_DCMotor dirtyPump(2);
+AF_DCMotor mixingMotor(4);   // Motor 1 on shield for mixing
+AF_DCMotor pressMotor(1);    // Motor 2 on shield for press
 
 // System State Variables
 enum SystemState {
@@ -71,22 +74,24 @@ void setup() {
   // initialize pins
   pinMode(startButtonPin, INPUT_PULLUP); // input pullup makes the default state high and it goes low when pressed
   pinMode(emergencyStopPin, INPUT_PULLUP); // when wiring buttons, it has to be a bridge between gnd and the pin, so the (pin - button - gnd) is the wiring
-  pinMode(pump1Pin, OUTPUT);
+  
   pinMode(pump2Pin, OUTPUT);
-  pinMode(pump3Pin, OUTPUT);
   pinMode(greenLED, OUTPUT);
   pinMode(yellowLED, OUTPUT);
   pinMode(redLED, OUTPUT);
 
   // ensure all pumps start off
-  digitalWrite(pump1Pin, LOW);
+  
   digitalWrite(pump2Pin, LOW);
-  digitalWrite(pump3Pin, LOW);
   digitalWrite(greenLED, HIGH);
   digitalWrite(yellowLED, LOW);
   digitalWrite(redLED, LOW);
   
   // initialize motors at zero speed
+  cleanPump.setSpeed(0);
+  cleanPump.run(RELEASE);
+  dirtyPump.setSpeed(0);
+  dirtyPump.run(RELEASE);
   mixingMotor.setSpeed(0);
   mixingMotor.run(RELEASE);
   pressMotor.setSpeed(0);
@@ -202,10 +207,11 @@ void handlePhase1() {
     case 1: // Pump dirty water
       if (elapsedTime == 0) {
         Serial.println("\nStage 2: Pumping dirty water to coagulation tank...");
-        digitalWrite(pump1Pin, HIGH);
+        dirtyPump.setSpeed(pumpSpeed);
+        dirtyPump.run(FORWARD);
       }
-      if (elapsedTime >= pump1RunTime) {
-        digitalWrite(pump1Pin, LOW);
+      if (elapsedTime >= dirtyPumpRunTime) {
+        dirtyPump.run(RELEASE);
         Serial.println("  Dirty water transfer complete");
         currentStep = 2;
         currentStepStartTime = millis();
@@ -304,10 +310,11 @@ void handlePhase3() {
       if (elapsedTime == 0) {
         Serial.println("PHASE 3: CLEAN WATER TRANSFER ");
         Serial.println("Stage 1: Transferring treated water...");
-        digitalWrite(pump3Pin, HIGH);
+        cleanPump.setSpeed(pumpSpeed);
+        cleanPump.run(FORWARD);
       }
-      if (elapsedTime >= pump3RunTime) {
-        digitalWrite(pump3Pin, LOW);
+      if (elapsedTime >= cleanPumpRunTime) {
+        cleanPump.run(RELEASE);
         Serial.println("  Water transfer complete");
         currentStep = 1;
         currentStepStartTime = millis();
@@ -353,7 +360,7 @@ void handlePhase3() {
       if (elapsedTime == 0) {
         Serial.println("\nResetting press position...");
         pressMotor.setSpeed(pressSpeed);
-        pressMotor.run(BACKWARD);
+        pressMotor.run(FORWARD);
       }
       if (elapsedTime >= pressRaiseTime) {
         pressMotor.run(RELEASE);
@@ -374,9 +381,9 @@ float calculateTurbidity(float voltage) {
 void resetSystem() {
   currentState = IDLE;
   currentStep = 0;
-  digitalWrite(pump1Pin, LOW);
+  dirtyPump.run(RELEASE);
   digitalWrite(pump2Pin, LOW);
-  digitalWrite(pump3Pin, LOW);
+  cleanPump.run(RELEASE);
 
   digitalWrite(greenLED, HIGH);
   digitalWrite(yellowLED, LOW);
@@ -393,9 +400,9 @@ void setEmergencyStop() {
 
 void handleEmergencyStop() {
   // Stop everything immediately
-  digitalWrite(pump1Pin, LOW);
+  dirtyPump.run(RELEASE);
   digitalWrite(pump2Pin, LOW);
-  digitalWrite(pump3Pin, LOW);
+  cleanPump.run(RELEASE);
   mixingMotor.run(RELEASE);
   pressMotor.run(RELEASE);
   
