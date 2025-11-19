@@ -1,4 +1,4 @@
-#include <AFMotor.h>  // im guessing this is the library we need for the motor controller
+#include "AFMotor_R4.h"  // im guessing this is the library we need for the motor controller
 
 // pin assignments 
 const int turbiditySensor1Pin = A0;  // Dirty water tank
@@ -6,34 +6,35 @@ const int turbiditySensor2Pin = A1;  // Clean water tank
 const int startButtonPin = 20;         // Digital pin for start
 const int emergencyStopPin = 21;       // Must be pin 2 or 3 for interrupt
 //const int dirtyPump = 1;              // Dirty water pump relay
-const int pump2Pin = 5;              // Alum slurry pump relay
+const int pump2Pin = A8;              // Alum slurry pump relay
 //const int cleanPump = 6;              // Clean water pump relay
 const int greenLED = 49;
 const int yellowLED = 48;
 const int redLED = 47;
 
 // Timing Parameters (in milliseconds - adjust based on testing)
-const unsigned long turbidityReadTime = 30000;    // 1 minute initial reading
-const unsigned long dirtyPumpRunTime = 17000;       // 30 seconds dirty water
-const unsigned long pump2RunTime = 7000;        // 5 seconds alum
-const unsigned long cleanPumpRunTime = 10000;       // 40 seconds clean transfer
-const unsigned long fastMixTime = 15000;         // 15 seconds fast mixing
-const unsigned long slowMixTime = 15000;         // 15 seconds slow mixing
-const unsigned long settleTime = 10000;           // 45 seconds settlement
-const unsigned long pressLowerTime = 6000;      // 30 seconds press operation
-const unsigned long pressRaiseTime = 6300;      // 15 seconds to raise
+const unsigned long turbidityReadTime = 60000;    // 1 minute initial reading
+const unsigned long dirtyPumpRunTime = 60000;       // 30 seconds dirty water
+const unsigned long pump2RunTime = 15000;        // 5 seconds alum
+const unsigned long cleanPumpRunTime = 95000;       // 40 seconds clean transfer
+const unsigned long fastMixTime = 30000;         // 15 seconds fast mixing
+const unsigned long slowMixTime = 30000;         // 15 seconds slow mixing
+const unsigned long settleTime = 75000;           // 45 seconds settlement
+const unsigned long pressLowerTime = 8500;      // 30 seconds press operation
+const unsigned long pressRaiseTime = 8800;      // 15 seconds to raise
 
 // adjust values fro our motors (in between 0 and 255)
-const int pumpSpeed = 50;
-const int fastMixSpeed = 200;   
-const int slowMixSpeed = 100;    
+const int dirtyPumpSpeed = 200;
+const int cleanPumpSpeed = 255;
+const int fastMixSpeed = 255;   
+const int slowMixSpeed = 150;    
 const int pressSpeed = 120;       // for press motor
 
 // Turbidity Thresholds
 const float minTurbidityToTreat = 100.0;   // NTU to start treatment
 const float minImprovement = 200.0;          // Minimum NTU improvement for success
 
-const bool DEBUG = true;
+const bool DEBUG = false;
 
 // Motor Shield Setup (adjust motor numbers based on our connections)
 // i went off guessing the structure of the motor controller, might need change
@@ -101,7 +102,7 @@ void setup() {
   // this function will monitoe emergency stop pin and if its activated, it will execute the duntion emergencystop
   // FALLING states that the stop is triggered when state goes from high to low
   // digital pin to unterrupt functoion will translate pin number to according system interruption pin number
-  attachInterrupt(digitalPinToInterrupt(emergencyStopPin), setEmergencyStop, FALLING);
+  // attachInterrupt(digitalPinToInterrupt(emergencyStopPin), setEmergencyStop, FALLING);
   
   Serial.println("System Initialized, Press START button to begin");
   Serial.println("EMERGENCY STOP available at any time\n");
@@ -113,6 +114,14 @@ void loop() {
   if (emergencyStop) {
     handleEmergencyStop();
     return;
+  }
+
+  if (digitalRead(emergencyStopPin) == LOW) {
+    delay(50); // this delay is here to make sure the button is really pressed and is not having a debounce
+    if (digitalRead(emergencyStopPin) == LOW) {
+      setEmergencyStop();
+      return;
+    }
   }
   
   // State machine
@@ -183,7 +192,10 @@ void handlePhase1() {
           Serial.print(elapsedTime / 1000);
           Serial.print("s: ");
           Serial.print(turbidity);
-          Serial.println(" NTU");
+          Serial.print(" NTU");
+          Serial.print(" (");
+          Serial.print(voltage);
+          Serial.println(" V)");
         }
       }
       
@@ -207,7 +219,7 @@ void handlePhase1() {
     case 1: // Pump dirty water
       if (elapsedTime == 0) {
         Serial.println("\nStage 2: Pumping dirty water to coagulation tank...");
-        dirtyPump.setSpeed(pumpSpeed);
+        dirtyPump.setSpeed(dirtyPumpSpeed);
         dirtyPump.run(FORWARD);
       }
       if (elapsedTime >= dirtyPumpRunTime) {
@@ -250,8 +262,10 @@ void handlePhase2() {
       if (elapsedTime == 0) {
         Serial.println("PHASE 2: MIXING & FILTRATION ");
         Serial.println("Stage 1: Fast Mixing...");
-        mixingMotor.setSpeed(fastMixSpeed);
+        mixingMotor.setSpeed(slowMixSpeed);
         mixingMotor.run(FORWARD);
+        
+
       }
       if (elapsedTime >= fastMixTime) {
         Serial.println("  Fast mixing complete");
@@ -310,7 +324,7 @@ void handlePhase3() {
       if (elapsedTime == 0) {
         Serial.println("PHASE 3: CLEAN WATER TRANSFER ");
         Serial.println("Stage 1: Transferring treated water...");
-        cleanPump.setSpeed(pumpSpeed);
+        cleanPump.setSpeed(cleanPumpSpeed);
         cleanPump.run(FORWARD);
       }
       if (elapsedTime >= cleanPumpRunTime) {
@@ -324,11 +338,45 @@ void handlePhase3() {
     case 1: // Read final turbidity
       if (elapsedTime == 0) {
         Serial.println("Stage 2: Reading final turbidity...");
+        //reset turbidity readings
+        turbiditySum = 0;
+        turbidityReadCount = 0;
       }
-      if (elapsedTime >= 2000) { // Wait 2 seconds for stable reading
-        float voltage = analogRead(turbiditySensor2Pin) * (5.0 / 1023.0);
-        finalTurbidity = calculateTurbidity(voltage);
+
+      // Read turbidity every 100ms
+      if (millis() - lastTurbidityRead >= 100) {
+        float voltage = analogRead(turbiditySensor2Pin) * (5.0 / 1023.0); // the last part is to calculate and translate analog value into voltages
+        float turbidity = calculateTurbidity(voltage);
+        turbiditySum += turbidity;
+        turbidityReadCount++;
+        lastTurbidityRead = millis();
+
+        // Print progress every 5 seconds
+        if (elapsedTime % 5000 < 100) {
+          Serial.print("  Turbidity reading at ");
+          Serial.print(elapsedTime / 1000);
+          Serial.print("s: ");
+          Serial.print(turbidity);
+          Serial.print(" NTU");
+          Serial.print(" (");
+          Serial.print(voltage);
+          Serial.println(" V)");
+        }
+      }
+      
+      if (elapsedTime >= turbidityReadTime) {
+        finalTurbidity = turbiditySum / turbidityReadCount; // this averages all calculated turbidities and divides them with each cacluilation to find the average ntu 
+        Serial.print("Final Turbidity Average: ");
+        Serial.print(finalTurbidity);
+        Serial.println(" NTU");
         
+        // if (finalTurbidity < minTurbidityToTreat && !DEBUG) {
+        //   Serial.println("Water already clean! Turbidity < 100 NTU");
+        //   Serial.println("Treatment not required, Ending cycle");
+        //   resetSystem();
+        // } else { // else runs when water is not clean
+        // }
+
         Serial.print("\n========== TREATMENT RESULTS ==========");
         Serial.print("\nInitial Turbidity: ");
         Serial.print(initialTurbidity);
@@ -354,6 +402,15 @@ void handlePhase3() {
         currentStep = 2;
         currentStepStartTime = millis();
       }
+
+
+      
+      // if (elapsedTime >= 2000) { // Wait 2 seconds for stable reading
+      //   float voltage = analogRead(turbiditySensor2Pin) * (5.0 / 1023.0);
+      //   finalTurbidity = calculateTurbidity(voltage);
+        
+        
+      // }
       break;
       
     case 2: // Raise press
