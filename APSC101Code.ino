@@ -13,14 +13,14 @@ const int yellowLED = 48;
 const int redLED = 47;
 
 // Timing Parameters (in milliseconds - adjust based on testing)
-const unsigned long turbidityReadTime = 0;    // 1 minute initial reading
-const unsigned long pump1RunTime = 0;       // 30 seconds dirty water
-const unsigned long pump2RunTime = 0;        // 5 seconds alum
-const unsigned long pump3RunTime = 0;       // 40 seconds clean transfer
-const unsigned long fastMixTime = 0;         // 15 seconds fast mixing
-const unsigned long slowMixTime = 0;         // 15 seconds slow mixing
-const unsigned long settleTime = 0;           // 45 seconds settlement
-const unsigned long pressLowerTime = 300000;      // 30 seconds press operation
+const unsigned long turbidityReadTime = 60000;    // 1 minute initial reading
+const unsigned long pump1RunTime = 30000;       // 30 seconds dirty water
+const unsigned long pump2RunTime = 5000;        // 5 seconds alum
+const unsigned long pump3RunTime = 40000;       // 40 seconds clean transfer
+const unsigned long fastMixTime = 15000;         // 15 seconds fast mixing
+const unsigned long slowMixTime = 15000;         // 15 seconds slow mixing
+const unsigned long settleTime = 45000;           // 45 seconds settlement
+const unsigned long pressLowerTime = 30000;      // 30 seconds press operation
 const unsigned long pressRaiseTime = 15000;      // 15 seconds to raise
 
 // adjust values fro our motors (in between 0 and 255)
