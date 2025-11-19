@@ -14,7 +14,7 @@ const int redLED = 47;
 
 // Timing Parameters (in milliseconds - adjust based on testing)
 const unsigned long turbidityReadTime = 60000;    // 1 minute initial reading
-const unsigned long dirtyPumpRunTime = 60000;       // 30 seconds dirty water
+const unsigned long dirtyPumpRunTime = 50000;       // 30 seconds dirty water
 const unsigned long pump2RunTime = 15000;        // 5 seconds alum
 const unsigned long cleanPumpRunTime = 95000;       // 40 seconds clean transfer
 const unsigned long fastMixTime = 30000;         // 15 seconds fast mixing
@@ -31,8 +31,8 @@ const int slowMixSpeed = 150;
 const int pressSpeed = 120;       // for press motor
 
 // Turbidity Thresholds
-const float minTurbidityToTreat = 100.0;   // NTU to start treatment
-const float minImprovement = 200.0;          // Minimum NTU improvement for success
+const float minTurbidityToTreat = 500.0;   // NTU to start treatment
+const float minImprovement = 500.0;          // Minimum NTU improvement for success
 
 const bool DEBUG = false;
 
@@ -262,7 +262,7 @@ void handlePhase2() {
       if (elapsedTime == 0) {
         Serial.println("PHASE 2: MIXING & FILTRATION ");
         Serial.println("Stage 1: Fast Mixing...");
-        mixingMotor.setSpeed(slowMixSpeed);
+        mixingMotor.setSpeed(fastMixSpeed);
         mixingMotor.run(FORWARD);
         
 
@@ -277,7 +277,7 @@ void handlePhase2() {
     case 1: // Slow mixing
       if (elapsedTime == 0) {
         Serial.println("Stage 2: Slow Mixing...");
-        mixingMotor.setSpeed(slowMixSpeed);
+        mixingMotor.setSpeed(fastMixSpeed);
       }
       if (elapsedTime >= slowMixTime) {
         mixingMotor.run(RELEASE);
