@@ -38,8 +38,8 @@ const bool DEBUG = false;
 
 // Motor Shield Setup (adjust motor numbers based on our connections)
 // i went off guessing the structure of the motor controller, might need change
-AF_DCMotor cleanPump(3);
-AF_DCMotor dirtyPump(2);
+AF_DCMotor cleanPump(3);     // Diaphragm pump on shield
+AF_DCMotor dirtyPump(2);     // Submersible pump on shield
 AF_DCMotor mixingMotor(4);   // Motor 1 on shield for mixing
 AF_DCMotor pressMotor(1);    // Motor 2 on shield for press
 
@@ -102,7 +102,7 @@ void setup() {
   // this function will monitoe emergency stop pin and if its activated, it will execute the duntion emergencystop
   // FALLING states that the stop is triggered when state goes from high to low
   // digital pin to unterrupt functoion will translate pin number to according system interruption pin number
-  // attachInterrupt(digitalPinToInterrupt(emergencyStopPin), setEmergencyStop, FALLING);
+  attachInterrupt(digitalPinToInterrupt(emergencyStopPin), setEmergencyStop, FALLING);
   
   Serial.println("System Initialized, Press START button to begin");
   Serial.println("EMERGENCY STOP available at any time\n");
@@ -114,14 +114,6 @@ void loop() {
   if (emergencyStop) {
     handleEmergencyStop();
     return;
-  }
-
-  if (digitalRead(emergencyStopPin) == LOW) {
-    delay(50); // this delay is here to make sure the button is really pressed and is not having a debounce
-    if (digitalRead(emergencyStopPin) == LOW) {
-      setEmergencyStop();
-      return;
-    }
   }
   
   // State machine
@@ -277,7 +269,7 @@ void handlePhase2() {
     case 1: // Slow mixing
       if (elapsedTime == 0) {
         Serial.println("Stage 2: Slow Mixing...");
-        mixingMotor.setSpeed(fastMixSpeed);
+        mixingMotor.setSpeed(slowMixSpeed);
       }
       if (elapsedTime >= slowMixTime) {
         mixingMotor.run(RELEASE);
@@ -370,12 +362,11 @@ void handlePhase3() {
         Serial.print(finalTurbidity);
         Serial.println(" NTU");
         
-        // if (finalTurbidity < minTurbidityToTreat && !DEBUG) {
-        //   Serial.println("Water already clean! Turbidity < 100 NTU");
-        //   Serial.println("Treatment not required, Ending cycle");
-        //   resetSystem();
-        // } else { // else runs when water is not clean
-        // }
+        if (finalTurbidity < minTurbidityToTreat && !DEBUG) {
+          Serial.println("Water already clean! Turbidity < 100 NTU");
+          Serial.println("Treatment not required, Ending cycle");
+          resetSystem();
+        }
 
         Serial.print("\n========== TREATMENT RESULTS ==========");
         Serial.print("\nInitial Turbidity: ");
@@ -403,16 +394,7 @@ void handlePhase3() {
         currentStepStartTime = millis();
       }
 
-
-      
-      // if (elapsedTime >= 2000) { // Wait 2 seconds for stable reading
-      //   float voltage = analogRead(turbiditySensor2Pin) * (5.0 / 1023.0);
-      //   finalTurbidity = calculateTurbidity(voltage);
-        
-        
-      // }
       break;
-      
     case 2: // Raise press
       if (elapsedTime == 0) {
         Serial.println("\nResetting press position...");
